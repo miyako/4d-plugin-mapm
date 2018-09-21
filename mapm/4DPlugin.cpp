@@ -1021,7 +1021,7 @@ void m_apm_to_param_at_index(M_APM mapm, PackagePtr pParams, uint16_t index)
         
 #ifdef _WIN32
         LPCSTR str = (LPCSTR)&buf[0];
-        int size = fromString->length();
+        int size = strlen(&buf[0]);
         int len = MultiByteToWideChar(CP_UTF8, 0, str, size, NULL, 0);
         if(len)
         {
