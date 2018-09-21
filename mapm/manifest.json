@@ -1,0 +1,231 @@
+{
+	"name": "mapm",
+	"id": 20000,
+	"commands": [
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_gcd(&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_lcm(&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_add(&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_subtract(&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_multiply(&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_divide(&T;&L;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_integer_divide(&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_integer_div_rem(&T;&T;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_reciprocal(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_factorial(&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_floor(&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_ceil(&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_get_random(&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_sqrt(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_cbrt(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_log(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_log10(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_exp(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_pow(&T;&L;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_integer_pow(&T;&L;&T;&L)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_integer_pow_nr(&T;&T;&L)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_sin_cos(&T;&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_sin(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_cos(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_tan(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arcsin(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arccos(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arctan(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arctan2(&T;&L;&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_sinh(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_cosh(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_tanh(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arcsinh(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arccosh(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_arctanh(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_absolute_value(&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_negate(&T;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_round(&T;&L;&T)",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_compare(&T;&T):L",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_sign(&T):L",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_exponent(&T):L",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_significant_digits(&T):L",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_is_integer(&T):L",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_is_even(&T):L",
+			"threadSafe": true
+		},
+		{
+			"theme": "mapm",
+			"syntax": "m_apm_is_odd(&T):L",
+			"threadSafe": true
+		}
+	]
+}
