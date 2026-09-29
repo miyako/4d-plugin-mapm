@@ -1,2 +1,5 @@
 mapm/build/*
 mapm/mapm.4dbase/userPreferences.*
+build/*
+mapm.4dbase/userPreferences.*
+mapm.4dbase/Project/DerivedData/*
