@@ -12,6 +12,15 @@
 #include "4DPluginAPI.h"
 #include "4DPlugin.h"
 
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <vector>
+#include <climits>
+
 std::mutex mutexMapm;
 
 void PluginMain(PA_long32 selector, PA_PluginParameters params)
@@ -228,744 +237,598 @@ void CommandDispatcher (PA_long32 pProcNum, sLONG_PTR *pResult, PackagePtr pPara
 	}
 }
 
-#pragma mark done
+#pragma mark helpers
+
+namespace {
+
+    // RAII owner for an M_APM: m_apm_free runs on every exit path,
+    // including when a std::vector/std::string allocation throws.
+    struct mapm_deleter {
+        void operator()(M_APM m) const { if (m) m_apm_free(m); }
+    };
+    typedef std::unique_ptr<M_APM_struct, mapm_deleter> mapm_ptr;
+
+    // Frees strings allocated by MAPM (MAPM_MALLOC is malloc in the default build).
+    struct c_free_deleter {
+        void operator()(char *p) const { free(p); }
+    };
+
+    inline mapm_ptr mapm_new() {
+        return mapm_ptr(m_apm_init());
+    }
+
+    inline mapm_ptr mapm_arg(PackagePtr pParams, uint16_t index) {
+        return mapm_ptr(m_apm_from_param_at_index(pParams, index));
+    }
+
+    // MAPM corrupts its own heap when given negative decimal places
+    // (confirmed under AddressSanitizer in m_apm_pow, m_apm_arctan2,
+    // m_apm_integer_pow, m_apm_sin_cos), so every "places" argument is clamped here.
+    inline int places_arg(PackagePtr pParams, uint16_t index) {
+        int places = int_from_param_at_index(pParams, index);
+        return places < 0 ? 0 : places;
+    }
+}
+
+#pragma mark commands
 
 void m_apm_add(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    m_apm_add(mapm1, mapm2, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+    mapm_ptr b(mapm_arg(pParams, 3));
+
+    m_apm_add(r.get(), a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_subtract(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    m_apm_subtract(mapm1, mapm2, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+    mapm_ptr b(mapm_arg(pParams, 3));
+
+    m_apm_subtract(r.get(), a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_multiply(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    m_apm_multiply(mapm1, mapm2, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
-}
 
-void m_apm_divide(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    M_APM mapm4 = m_apm_from_param_at_index(pParams, 4);
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+    mapm_ptr b(mapm_arg(pParams, 3));
 
-    if(places < 0) places = 0;
-    
-    m_apm_divide(mapm1, places, mapm3, mapm4);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
-    m_apm_free(mapm4);
-}
+    m_apm_multiply(r.get(), a.get(), b.get());
 
-void m_apm_is_even(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    
-    return_int(pResult, m_apm_is_even(mapm1));
-    
-    m_apm_free(mapm1);
-}
-
-void m_apm_is_odd(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    
-    return_int(pResult, m_apm_is_odd(mapm1));
-    
-    m_apm_free(mapm1);
-}
-
-void m_apm_sign(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    
-    return_int(pResult, m_apm_sign(mapm1));
-    
-    m_apm_free(mapm1);
-}
-
-void m_apm_exponent(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    
-    return_int(pResult, m_apm_exponent(mapm1));
-    
-    m_apm_free(mapm1);
-}
-
-void m_apm_significant_digits(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    
-    return_int(pResult, m_apm_significant_digits(mapm1));
-    
-    m_apm_free(mapm1);
-}
-
-void m_apm_is_integer(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    
-    return_int(pResult, m_apm_is_integer(mapm1));
-    
-    m_apm_free(mapm1);
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_gcd(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    m_apm_gcd(mapm1, mapm2, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+    mapm_ptr b(mapm_arg(pParams, 3));
+
+    m_apm_gcd(r.get(), a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_lcm(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    m_apm_lcm(mapm1, mapm2, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+    mapm_ptr b(mapm_arg(pParams, 3));
+
+    m_apm_lcm(r.get(), a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
-void m_apm_log(sLONG_PTR *pResult, PackagePtr pParams)
+void m_apm_integer_divide(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
 
-    if(places < 0) places = 0;
-    
-    m_apm_log(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+    mapm_ptr b(mapm_arg(pParams, 3));
+
+    m_apm_integer_divide(r.get(), a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
-void m_apm_log10(sLONG_PTR *pResult, PackagePtr pParams)
+void m_apm_divide(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_log10(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+    mapm_ptr b(mapm_arg(pParams, 4));
+
+    m_apm_divide(r.get(), places, a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_is_even(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr a(mapm_arg(pParams, 1));
+
+    return_int(pResult, m_apm_is_even(a.get()));
+}
+
+void m_apm_is_odd(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr a(mapm_arg(pParams, 1));
+
+    return_int(pResult, m_apm_is_odd(a.get()));
+}
+
+void m_apm_sign(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr a(mapm_arg(pParams, 1));
+
+    return_int(pResult, m_apm_sign(a.get()));
+}
+
+void m_apm_exponent(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr a(mapm_arg(pParams, 1));
+
+    return_int(pResult, m_apm_exponent(a.get()));
+}
+
+void m_apm_significant_digits(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr a(mapm_arg(pParams, 1));
+
+    return_int(pResult, m_apm_significant_digits(a.get()));
+}
+
+void m_apm_is_integer(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr a(mapm_arg(pParams, 1));
+
+    return_int(pResult, m_apm_is_integer(a.get()));
 }
 
 void m_apm_absolute_value(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
 
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-   
-    m_apm_absolute_value(mapm1, mapm2);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+
+    m_apm_absolute_value(r.get(), a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_negate(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    
-    m_apm_negate(mapm1, mapm2);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-}
 
-void m_apm_round(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_round(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
-}
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
 
-void m_apm_integer_divide(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    m_apm_integer_divide(mapm1, mapm2, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
-}
+    m_apm_negate(r.get(), a.get());
 
-void m_apm_reciprocal(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_reciprocal(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_factorial(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    
-    m_apm_factorial(mapm1, mapm2);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+
+    m_apm_factorial(r.get(), a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_floor(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    
-    m_apm_floor(mapm1, mapm2);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+
+    m_apm_floor(r.get(), a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_ceil(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    
-    m_apm_ceil(mapm1, mapm2);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
+
+    m_apm_ceil(r.get(), a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_log(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_log(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_log10(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_log10(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_round(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_round(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_reciprocal(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_reciprocal(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_sqrt(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_sqrt(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_sqrt(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_cbrt(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_cbrt(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_cbrt(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_exp(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_exp(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_exp(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_sin(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_sin(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_sin(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_cos(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_cos(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_cos(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_tan(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_tan(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_tan(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_arcsin(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_arcsin(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_arcsin(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_arccos(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_arccos(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_arccos(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_arctan(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_arctan(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_arctan(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_sinh(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_sinh(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_sinh(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_cosh(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_cosh(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_cosh(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_tanh(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_tanh(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_tanh(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_arcsinh(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_arcsinh(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_arcsinh(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_arccosh(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_arccosh(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_arccosh(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_arctanh(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    
-    if(places < 0) places = 0;
-    
-    m_apm_arctanh(mapm1, places, mapm3);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+
+    m_apm_arctanh(r.get(), places, a.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_arctan2(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+    mapm_ptr b(mapm_arg(pParams, 4));
+
+    m_apm_arctan2(r.get(), places, a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
+}
+
+void m_apm_pow(sLONG_PTR *pResult, PackagePtr pParams)
+{
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
+    mapm_ptr b(mapm_arg(pParams, 4));
+
+    m_apm_pow(r.get(), places, a.get(), b.get());
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_integer_div_rem(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_init();
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    M_APM mapm4 = m_apm_from_param_at_index(pParams, 4);
-    
-    m_apm_integer_div_rem(mapm1, mapm2, mapm3, mapm4);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    m_apm_to_param_at_index(mapm1, pParams, 2);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm3);
-    m_apm_free(mapm4);
+
+    mapm_ptr quotient(mapm_new());
+    mapm_ptr remainder(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 3));
+    mapm_ptr b(mapm_arg(pParams, 4));
+
+    m_apm_integer_div_rem(quotient.get(), remainder.get(), a.get(), b.get());
+
+    m_apm_to_param_at_index(quotient.get(), pParams, 1);
+    m_apm_to_param_at_index(remainder.get(), pParams, 2); // was: quotient written twice
 }
 
 void m_apm_compare(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
 
-    M_APM mapm1 = m_apm_from_param_at_index(pParams, 1);
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
-    
-    return_int(pResult, m_apm_compare(mapm1, mapm2));
- 
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
+    mapm_ptr a(mapm_arg(pParams, 1));
+    mapm_ptr b(mapm_arg(pParams, 2));
+
+    return_int(pResult, m_apm_compare(a.get(), b.get()));
 }
 
 void m_apm_get_random(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    
-    m_apm_get_random(mapm1);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-}
 
-void m_apm_arctan2(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    M_APM mapm4 = m_apm_from_param_at_index(pParams, 4);
+    mapm_ptr r(mapm_new());
 
-    m_apm_arctan2(mapm1, places, mapm3, mapm4);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
-    m_apm_free(mapm4);
-}
+    m_apm_get_random(r.get());
 
-void m_apm_pow(sLONG_PTR *pResult, PackagePtr pParams)
-{
-    std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
-    M_APM mapm4 = m_apm_from_param_at_index(pParams, 4);
-    
-    m_apm_pow(mapm1, places, mapm3, mapm4);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
-    m_apm_free(mapm4);
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_integer_pow(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 2);
-    M_APM mapm3 = m_apm_from_param_at_index(pParams, 3);
+
+    mapm_ptr r(mapm_new());
+    int places = places_arg(pParams, 2);
+    mapm_ptr a(mapm_arg(pParams, 3));
     int mexp = int_from_param_at_index(pParams, 4);
-    
-    m_apm_integer_pow(mapm1, places, mapm3, mexp);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm3);
+
+    m_apm_integer_pow(r.get(), places, a.get(), mexp);
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_integer_pow_nr(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_from_param_at_index(pParams, 2);
+
+    mapm_ptr r(mapm_new());
+    mapm_ptr a(mapm_arg(pParams, 2));
     int mexp = int_from_param_at_index(pParams, 3);
-    
-    m_apm_integer_pow_nr(mapm1, mapm2, mexp);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
+
+    m_apm_integer_pow_nr(r.get(), a.get(), mexp);
+
+    m_apm_to_param_at_index(r.get(), pParams, 1);
 }
 
 void m_apm_sin_cos(sLONG_PTR *pResult, PackagePtr pParams)
 {
     std::lock_guard<std::mutex> lock(mutexMapm);
-    
-    M_APM mapm1 = m_apm_init();
-    M_APM mapm2 = m_apm_init();
-    int places = int_from_param_at_index(pParams, 3);
-    M_APM mapm4 = m_apm_from_param_at_index(pParams, 4);
-    
-    m_apm_sin_cos(mapm1, mapm2, places, mapm4);
-    
-    m_apm_to_param_at_index(mapm1, pParams, 1);
-    
-    m_apm_free(mapm1);
-    m_apm_free(mapm2);
-    m_apm_free(mapm4);
+
+    mapm_ptr sin_r(mapm_new());
+    mapm_ptr cos_r(mapm_new());
+    int places = places_arg(pParams, 3);
+    mapm_ptr a(mapm_arg(pParams, 4));
+
+    m_apm_sin_cos(sin_r.get(), cos_r.get(), places, a.get());
+
+    m_apm_to_param_at_index(sin_r.get(), pParams, 1);
+    m_apm_to_param_at_index(cos_r.get(), pParams, 2); // was: never returned
 }
 
 // ------------------------------------- mapm -------------------------------------
@@ -974,31 +837,20 @@ void m_apm_sin_cos(sLONG_PTR *pResult, PackagePtr pParams)
 
 void OnStartup()
 {
-    long long int t = 0;
-    
-#if VERSIONWIN
-    static const __int64 SECS_BETWEEN_1601_AND_1970_EPOCHS = 116444736000000000LL;
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    ULARGE_INTEGER ul;
-    ul.LowPart = ft.dwLowDateTime;
-    ul.HighPart = ft.dwHighDateTime;
-    t = (long long int)((ul.QuadPart - SECS_BETWEEN_1601_AND_1970_EPOCHS) / 10000);
-#else
-    struct timeb timer_msec;
-    if (!ftime(&timer_msec))
-    {
-        t = ((long long int) timer_msec.time) * 1000ll + (long long int) timer_msec.millitm;
-    }
-#endif
-    
-    std::vector<char>buf(100);
-    snprintf ( (char *)&buf[0], 100, "%lld", t);
-    m_apm_set_random_seed(&buf[0]);
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
+    long long t = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%lld", t);
+    m_apm_set_random_seed(buf);
 }
 
 void OnExit()
 {
+    std::lock_guard<std::mutex> lock(mutexMapm);
+
     m_apm_free_all_mem();
 }
 
@@ -1006,100 +858,67 @@ void OnExit()
 
 void m_apm_to_param_at_index(M_APM mapm, PackagePtr pParams, uint16_t index)
 {
-    if(index)
-    {
-        int significant_digits = m_apm_significant_digits(mapm);
-        int sign = m_apm_sign(mapm);
-        int exponent = m_apm_exponent(mapm);
-        int is_integer = m_apm_is_integer(mapm);
-        int digit = significant_digits - exponent - 1;
-        
-        int buf_size = significant_digits + (sign == 1 ? 0 : 1) + (exponent < 0 ? abs(exponent) : 0) + (is_integer ? 0 : 1) + 1;
-        
-        std::vector<char>buf(buf_size);
-        m_apm_to_fixpt_string(&buf[0],  is_integer ? 0 : digit, mapm);
-        
-#ifdef _WIN32
-        LPCSTR str = (LPCSTR)&buf[0];
-        int size = strlen(&buf[0]);
-        int len = MultiByteToWideChar(CP_UTF8, 0, str, size, NULL, 0);
-        if(len)
-        {
-            std::vector<uint8_t> buffer((len + 1) * sizeof(PA_Unichar));
-            if(MultiByteToWideChar(CP_UTF8, 0, str, size, (LPWSTR)&buffer[0], len))
-            {
-                PA_SetUnistring(
-                                (PA_Unistring *)(pParams[index - 1]),
-                                (PA_Unichar *)&buffer[0]
-                                );
-            }
-        }
-#else
-        const UInt8 *bytes = (const UInt8 *)&buf[0];
-        CFIndex size = strlen((char *)bytes);
-        CFStringRef str = CFStringCreateWithBytes(kCFAllocatorDefault, bytes, size, kCFStringEncodingUTF8, true);
-        if(str)
-        {
-            CFIndex len = CFStringGetLength(str);
-            std::vector<uint8_t> buffer((len + 1) * sizeof(PA_Unichar));
-            CFStringGetCharacters(str, CFRangeMake(0, len), (UniChar *)&buffer[0]);
-            PA_SetUnistring(
-                            (PA_Unistring *)(pParams[index - 1]),
-                            (PA_Unichar *)&buffer[0]
-                            );
-            CFRelease(str);
-        }
-#endif
-    }
-    
+    if(!index) return;
+
+    // Show every significant digit, no trailing zeros after the point, no point for integers.
+    // m_apm_to_fixpt_stringexp sizes its own buffer (the previous hand-computed size
+    // ignored positive exponents and overflowed on any integer with trailing zeros, e.g. 1440).
+    long long digits = (long long)m_apm_significant_digits(mapm) - (long long)m_apm_exponent(mapm) - 1;
+    int places = (m_apm_is_integer(mapm) || digits < 0) ? 0 : (digits > INT_MAX ? INT_MAX : (int)digits);
+
+    std::unique_ptr<char, c_free_deleter> s(m_apm_to_fixpt_stringexp(places, mapm, '.', 0, 0));
+    if(!s) return; // allocation failed inside MAPM; leave the 4D variable untouched
+
+    // The result only ever contains '-', '0'-'9' and '.', so widening each byte is an exact UTF-16 conversion.
+    size_t len = strlen(s.get());
+    std::vector<PA_Unichar> u(s.get(), s.get() + len);
+    u.push_back(0);
+
+    PA_SetUnistring((PA_Unistring *)(pParams[index - 1]), &u[0]);
 }
 
 void return_int(sLONG_PTR *pResult, int value)
 {
-    *(int *) pResult = value;
+    *(PA_long32 *) pResult = (PA_long32)value;
 }
 
 int int_from_param_at_index(PackagePtr pParams, uint16_t index)
 {
     int value = 0;
-    
+
     if(index)
     {
-        value = *(int *)(pParams[index - 1]);
+        value = (int)*(PA_long32 *)(pParams[index - 1]);
     }
     return value;
 }
 
 M_APM m_apm_from_param_at_index(PackagePtr pParams, uint16_t index)
 {
-    M_APM mapm = m_apm_init();
+    mapm_ptr mapm(mapm_new()); // zero by default
+
     if(index)
     {
         PA_Unistring *str = (PA_Unistring *)(pParams[index - 1]);
-#ifdef _WIN32
-        LPCWSTR cwstr = (LPCWSTR)str->fString;
-        int size = str->fLength;
-        int len = WideCharToMultiByte(CP_UTF8, 0, cwstr, size, NULL, 0, NULL, NULL);
-        if(len)
+
+        if(str && str->fString && str->fLength > 0)
         {
-            std::vector<uint8_t> buf(len + 1);
-            if(WideCharToMultiByte(CP_UTF8, 0, cwstr, size, (LPSTR)&buf[0], len, NULL, NULL))
+            // A valid MAPM number is pure ASCII. Text containing any non-ASCII
+            // character cannot be a number and is left as zero.
+            std::string s;
+            s.reserve((size_t)str->fLength);
+            bool ascii = true;
+            for(PA_long32 i = 0; i < str->fLength; ++i)
             {
-                m_apm_set_string(mapm, (char *)std::string((char *)&buf[0], len).c_str());
+                PA_Unichar c = str->fString[i];
+                if(c >= 0x80) { ascii = false; break; }
+                s.push_back((char)c);
+            }
+            if(ascii)
+            {
+                m_apm_set_string(mapm.get(), &s[0]); // MAPM copies the input before parsing it
             }
         }
-#else
-        CFStringRef cfstr = CFStringCreateWithCharacters(kCFAllocatorDefault, (const UniChar *)str->fString, str->fLength);
-        if(cfstr)
-        {
-            size_t size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(cfstr), kCFStringEncodingUTF8) + sizeof(uint8_t);
-            std::vector<uint8_t> buf(size);
-            CFIndex len;
-            CFStringGetBytes(cfstr, CFRangeMake(0, CFStringGetLength(cfstr)), kCFStringEncodingUTF8, 0, true, (UInt8 *)&buf[0], size, &len);
-            m_apm_set_string(mapm, (char *)std::string((char *)&buf[0], len).c_str());
-            CFRelease(cfstr);
-        }
-#endif
     }
-    return mapm;
+    return mapm.release();
 }

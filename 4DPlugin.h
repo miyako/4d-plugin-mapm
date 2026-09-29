@@ -8,7 +8,9 @@
  #
  # --------------------------------------------------------------------------------*/
 
-#include <sys/timeb.h>  /* ftime, timeb (for timestamp in millisecond) */
+#ifndef PLUGIN_MAPM_H
+#define PLUGIN_MAPM_H
+
 #include <stdio.h> /* snprintf */
 
 #include <mutex>
@@ -69,3 +71,5 @@ void m_apm_significant_digits(sLONG_PTR *pResult, PackagePtr pParams);
 void m_apm_is_integer(sLONG_PTR *pResult, PackagePtr pParams);
 void m_apm_is_even(sLONG_PTR *pResult, PackagePtr pParams);
 void m_apm_is_odd(sLONG_PTR *pResult, PackagePtr pParams);
+
+#endif /* PLUGIN_MAPM_H */
