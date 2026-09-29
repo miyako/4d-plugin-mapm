@@ -109,6 +109,10 @@
 		<data>
 		UbZYnK1QdI2HA5cO0/aNT2a+ucQ=
 		</data>
+		<key>Resources/manifest.json</key>
+		<data>
+		X0mwhgl15ylj4ayR06KXk/62WRw=
+		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
@@ -296,11 +300,11 @@
 			7t2nF9u/4W05GOd8UQ7QAt/PFge16k3ydWYX/6ElmJk=
 			</data>
 		</dict>
-		<key>Windows/mapm.4DX</key>
+		<key>Resources/manifest.json</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			NxuSEwELpJu0iqZnhVehEeyez97UL/7EoSZoOp7mPUk=
+			rGYS3MpKUkIayT4Q2QCMcPTcpGrGHvcXJADUX9OOBMI=
 			</data>
 		</dict>
 		<key>Windows64/mapm.4DX</key>
@@ -309,15 +313,6 @@
 			<data>
 			BhrnLBxij/skR6wlJF++xThw8YykO8bqzwJqKU3uoPM=
 			</data>
-		</dict>
-		<key>manifest.json</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			aRnp42gs5iltzqG4hjcCkPBzxmg=
-			</data>
-			<key>requirement</key>
-			<string>identifier manifest and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = Y69CWUC25B</string>
 		</dict>
 	</dict>
 	<key>rules</key>
