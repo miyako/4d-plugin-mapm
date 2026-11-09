@@ -1,5 +1,84 @@
 # 4d-plugin-mapm
 
+## Versioning and publication
+
+**Bump version** is manual and source-only. Select an explicit branch in Actions
+(or `gh workflow run bump-version.yml --ref <branch> -f mode=patch`; `minor` and
+`major` are also supported). Its checkout is the immutable dispatch `github.sha`.
+It requires clean source and the exact remote branch tip, commits metadata only
+as one direct child, and pushes only that branch without force or followed tags.
+The mandatory executable `.github/scripts/bump-hooks/pre-push` guard checks
+exactly one advertised update: the old SHA equals the selected SHA, the literal
+new SHA equals HEAD, the target branch is exact, and the sole direct parent is
+the selected SHA. Late advance, ancestor rewind, deletion and same-result races
+fail closed. The guard must exist and be executable initially and immediately
+before push. Bump creates no tag and does not dispatch Build.
+
+**Build** is a separate manual, zero-input workflow:
+`gh workflow run release.yml --ref <branch>`. All three checkouts use the selected
+immutable `github.sha`. Strict source `X.Y.Z` determines the new `vX.Y.Z` tag and
+`mapm-X.Y.Z.zip` / `mapm-X.Y.Z.dmg` assets. There are no tag/push/PR triggers or
+default-branch-only restrictions. One repository-wide publication concurrency
+group serializes all branches without canceling builds.
+
+The original Bump header at `a89f3bb` promised coordinated `MARKETING_VERSION`
+and `CURRENT_PROJECT_VERSION`; the marketing-first implementation did not
+fulfill that promise. At `a2794a4`, the three marketing settings and source
+`Info.plist` agree on `1.0.3`. This migration repairs only the three stale current
+settings (`1.0.0`) and English display/info strings (`1.2`) to that existing
+authority, without a release increment. Future bumps validate and co-bump literal
+versions in `mapm.xcodeproj/project.pbxproj`, `Info.plist` and
+`English.lproj/InfoPlist.strings`. Supported Xcode references remain references;
+absent `CFBundleVersion` stays absent. BOM, per-line CR/CRLF/LF (including mixed
+endings), modes, copyright and other non-version bytes are preserved. Prebuilt
+bundles, dependencies, API files, 4D data/schema, manifests and localization
+counters are not version sources and are not rewritten.
+
+The existing native pipeline is unchanged: Windows x64 MSBuild Release with
+v143 / Windows SDK 10.0 overrides and committed `lib/64/libmapm.lib`, its
+`windows-binaries` artifact, then macOS Xcode Default with arm64/x86_64,
+committed `a/libmapm.a`, Cocoa, AppKit, CoreGraphics and `constants.xlf` resources.
+Stale-output cleaning, universal binary verification, Windows merge, Developer
+ID signing and strict verification, ZIP/DMG packaging, both notarytool `--wait`
+submissions and DMG stapling remain before publication. Existing caveats remain:
+the committed static library must support the requested architectures; the
+workflow deployment override is 10.13 while project settings specify 10.14;
+the ZIP is packaged before DMG stapling and is not itself stapled. These are not
+bypassed or represented as locally verified native builds.
+
+Secret names are unchanged: `APPLE_DEVELOPER_ID_CERTIFICATE`,
+`APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`,
+`NOTARYTOOL_APPLE_ID`, `NOTARYTOOL_TEAM_ID` and `NOTARYTOOL_PASSWORD`.
+
+### Create-only safety and recovery
+
+Before native work and again after all build/sign/notary/staple gates, publication
+checks remote tags and the authenticated, fully paginated release list including
+drafts. Every page and entry is validated. Authentication, 404, network, malformed
+data and later-page failures stop publication; only a complete successful
+no-match scan allows creation.
+
+Publication POSTs a new tag ref at exactly the selected SHA (even concurrent
+same-SHA creation fails), verifies the remote tag, then separately POSTs a new
+public, non-prerelease release with explicit tag, target SHA, name and empty
+body, preserving the original no-generated-notes policy. Each asset is separately
+POSTed to the newly returned release ID. No existing release or asset is reused,
+updated, deleted or clobbered; there is no rollback or retry.
+
+If publication fails after creating anything, **the tag, release and uploaded
+assets remain**. Inspect the selected SHA, tag and release ID in logs alongside
+remote tags/releases. A rerun intentionally fails while any matching tag or
+draft/published release remains. Recovery requires a separate maintainer decision:
+retain the partial record, or investigate and explicitly authorize manual
+cleanup outside automation; use Bump for a new version if publishing anew.
+Never infer absence from a failed API response.
+
+Local checks (no native, signing, notarization or 4D execution):
+`python3 -B -m unittest discover -s .github/tests` and
+`actionlint .github/workflows/*.yml`.
+
+## Plugin reference
+
 `mapm` brings arbitrary-precision decimal arithmetic to 4D by wrapping Michael Ring's MAPM library (version 4.9.5, [LuaDist/mapm](https://github.com/LuaDist/mapm)). Every number goes in and comes out as **Text**, so values are never squeezed into a 4D `Real` and never lose digits: you can add two 40-digit decimals exactly, compute √2 to 10,000 places, or work with integers far beyond the Longint and Real ranges. The plugin exposes 45 commands covering arithmetic, rounding, integer functions, powers and logarithms, circular and hyperbolic trigonometry, random numbers, and number inspection.
 
 | Command | Returns | Purpose |
