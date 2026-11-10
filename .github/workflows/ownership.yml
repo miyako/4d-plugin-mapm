@@ -9,7 +9,7 @@ on:
       - '.github/tests/*ownership*'
       - '.github/workflows/ownership.yml'
   push:
-    branches: [master]
+    branches: [master, miyako-mapm-ownership-audit]
     paths:
       - '4DPlugin.cpp'
       - '4DPlugin.h'
