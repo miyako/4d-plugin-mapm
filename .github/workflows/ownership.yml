@@ -1,0 +1,31 @@
+name: Native string ownership
+
+on:
+  pull_request:
+    paths:
+      - '4DPlugin.cpp'
+      - '4DPlugin.h'
+      - '4D Plugin API/**'
+      - '.github/tests/*ownership*'
+      - '.github/workflows/ownership.yml'
+  push:
+    branches: [master, miyako-mapm-ownership-audit]
+    paths:
+      - '4DPlugin.cpp'
+      - '4DPlugin.h'
+      - '4D Plugin API/**'
+      - '.github/tests/*ownership*'
+      - '.github/workflows/ownership.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Synthetic source regressions (unsigned, no project build)
+        run: python3 -B .github/tests/ownership_regression.py --output "$RUNNER_TEMP/ownership"
