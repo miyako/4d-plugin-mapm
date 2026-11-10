@@ -79,6 +79,106 @@ Local checks (no native, signing, notarization or 4D execution):
 
 ## Plugin reference
 
+### Native string ownership maintenance
+
+The bounded audit baseline is `250f8407411b5e48296823834251f0c27dc49b7d`.
+Canonical guidance was read at
+[`miyako/skills@e6b492fcb81e5e1a7f7db723594b420e63bf6eb9`](https://github.com/miyako/skills/blob/e6b492fcb81e5e1a7f7db723594b420e63bf6eb9/4d-skills/skills/4dplugin/SKILL.md).
+This is a first-party string-lifetime sweep, not an arithmetic or security
+certification. No private documents or real picture files are used.
+
+The complete native inventory is 43 tracked `.c/.cpp/.h/.pch` files, plus the
+SDK export definition. All 18 translation units (plugin, SDK and 16 wrapper
+implementations) are compiled by `mapm.vcxproj`, legacy `mapm.vc10.vcxproj`,
+and `mapm.xcodeproj/project.pbxproj`. `mapm.sln` selects `mapm.vcxproj`.
+
+| Inventory | Reachability and ownership conclusion |
+|---|---|
+| `4DPlugin.cpp`, `4DPlugin.h` | Exported `FourDPackex` calls `PluginMain`, then the 45 manifest-matched dispatcher cases plus startup/exit. Every text input is copied to a local ASCII string before MAPM consumption; MAPM output bytes are owned by `unique_ptr` and widened into a local UTF-16 buffer for the SDK content setter. Scalar-return commands and internal multi-output helpers were traced, not excluded by manifest signatures. |
+| `Classes/C_TEXT.{cpp,h}`, `Classes/ARRAY_TEXT.{cpp,h}` | Included through the SDK header and compiled, but dormant from current MAPM commands. Scalar/return content setters are distinct from shallow descriptor assignment. Array imports copy borrowed buffers before replacement; exports independently allocate each descriptor and transfer accepted insertions without disposing the transferred alias. Index zero is intentionally preserved. |
+| `Classes/C_PICTURE.{cpp,h}` | Included and compiled, dormant from current commands. Fixed the path string's double cleanup, overwritten initial string/picture owners, retained path-output/temporary picture leaks, and conversion byte-count/code-unit mismatch. Borrowed `getSize`/thumbnail inputs remain detached before clear; owning copy/grayscale/thumbnail returns remain detached for their caller to release. Picture commands are procedures with output arguments, not invented owning function results. |
+| `Classes/C_POINTER.{cpp,h}` | Included and compiled, dormant. Copies pointer/reference metadata from `PA_GetPointerValue`; the union's metadata representation versus owning value is ambiguous here. Deferred unchanged rather than clearing and relabeling potentially invalid metadata. |
+| `Classes/C_BLOB.{cpp,h}` | Included and compiled, dormant. Hex/base64 operations use local `CUTF8String` copies and `C_TEXT` content conversion, not shared `PA_Unistring` owners. Non-string CBytes allocation/handle failure behavior is outside this fix. |
+| `Classes/C_DATE`, `C_INTEGER`, `C_LONGINT`, `C_REAL`, `C_TIME` (each `.cpp/.h`) | Included and compiled, dormant; implementations and declarations reviewed. Primitive/date wrappers do not allocate or transfer string descriptors. |
+| `Classes/ARRAY_BOOLEAN`, `ARRAY_DATE`, `ARRAY_INTEGER`, `ARRAY_LONGINT`, `ARRAY_REAL`, `ARRAY_TIME` (each `.cpp/.h`) | Included and compiled, dormant; implementations and declarations reviewed. Primitive/date vectors and matching typed SDK arrays, not hidden text-owner transfers. |
+| `Classes/C_TYPES.h`, `4D Plugin_Prefix.pch` | Standard string/vector typedefs, platform framework includes and prefix configuration; no extra owner implementation. |
+| `4DPluginAPI.c`, `4DPluginAPI.h`, `PublicTypes.h`, `PrivateTypes.h`, `EntryPoints.h`, `Flags.h`, `4DPluginAPI.def` | Complete unchanged bundled SDK, ABI/platform types, engine selectors and export; exact relevant contracts traced below. JSON object/collection/property/parse APIs are absent in this bundle, not silently treated as borrowed getters. |
+| `include/m_apm.h` | Third-party library ABI inspected for plugin calls. MAPM algorithms, static/dynamic libraries, packaged plugins, project settings, manifest and SDK engine/header bytes/modes are unchanged. |
+
+Paths in the table are relative to `4D Plugin API/` unless explicitly at the
+repository root. The root and packaged `manifest.json` copies were inspected:
+45 scalar-text commands, no arrays; this did not exclude dormant helper review.
+The packaged plugin is a prebuilt artifact, not proof it contains these fixes.
+
+**Exact local SDK provenance and contracts.** At the baseline the Git blob of
+`4DPluginAPI.c` is `29788ed041effaf67269ccd93f971e8aee2ce5f8` and the header is
+`9054b45ffc7ff6f5b8d57529a3788a55d977b314`. Their v14/v13 comments do not
+identify a verified upstream SDK release. The regression pins the C blob and
+compares every other original tracked file and executable mode with `git archive`
+(only this README and the first-party `C_PICTURE.cpp` wrapper are exemptions).
+
+`PA_SetStringInArray` (SDK lines 4444-4459) disposes the old element and
+shallow-transfers the incoming descriptor only for Unicode arrays, non-null
+data, `0 <= index <= count`, and a non-null descriptor pointer. Rejections leave
+the allocation caller-owned. `PA_GetStringInArray` (4266-4286) borrows.
+`PA_SetStringVariable` (3826-3831) shallow-aliases; the independent synchronous
+picture-command string argument is cleared exactly once after the callback.
+`PA_CreateVariable` (3523-3657) can allocate initial empty string/picture owners;
+use Undefined before a shallow setter overwrites the descriptor.
+`PA_SetUnistring` (263-270) forwards to the engine content setter, including
+`PA_ReturnString` (2260-2263); the synthetic engine models synchronous content
+copying rather than array transfer. Real engine internals are not in this repo.
+`PA_GetPictureVariable` explicitly borrows (3738-3745), duplication with
+`retainOnly=1` retains (446-454), and charset conversion returns bytes
+(4775-4792), not UTF-16 units. `PA_ExecuteCommandByID` (5257-5297) can return a
+raw-kind-zero sentinel when its argument handle cannot be created; SDK kind
+normalization misleadingly treats that as text. No wrapper reads or clears
+that failed return. Method-call handle failure instead returns Undefined.
+Failed picture-data outputs are not read, adopted or cleared.
+
+**Unsigned source regression:** run
+`python3 -B .github/tests/ownership_regression.py --output /tmp/mapm-ownership`.
+It compiles the actual plugin, every wrapper, the complete unchanged SDK and
+the existing MAPM static library, without Xcode/MSBuild or release phases.
+The same final synthetic engine-boundary harness runs the working sources and
+immutable archived baseline, with exact named baseline failures required.
+It derives from first-party
+[`jpegoptim@e49adcd`](https://github.com/miyako/4d-plugin-jpegoptim/tree/e49adcd32bd5500cf3de680faa3649b32463ff5e/.github/tests)
+and was cross-checked against
+[`jsmin@d120356`](https://github.com/miyako/4d-plugin-jsmin/tree/d12035643f874ec57ae634194ec0f1206b05a5f2/tests/ownership);
+target SDK contracts were independently verified.
+
+The final harness has 46 concrete fixtures: fixed sources pass all 46, while
+the immutable baseline has 20 controls passing and 26 exact expected failures.
+These include an ASan heap-buffer-overflow for `.png`, path duplicate-disposal
+and leaked string/picture ownership. This is shim evidence on macOS, not a
+Windows or real 4D host crash reproduction.
+
+The fixtures cover allocated/null empty representations; ASCII, BMP and
+supplementary UTF-8/UTF-16 content, lengths, byte capacities and termination;
+independent transfers, borrowed copies, replacement/shrink/clear/rejections;
+picture retain counts and owning handoff survival; synchronous string
+arguments; poisoned failed command/picture-data outputs and the raw sentinel;
+and repeated real MAPM dispatcher calls with aliased scalar output.
+ASan and UBSan run with explicit string/handle/picture allocation accounting
+(zero live owners at the end of each passing fixture). macOS LeakSanitizer is
+unavailable; UBSan alignment is disabled for this SDK's packed two-byte ABI.
+The committed MAPM library is not sanitizer-instrumented or arithmetic-audited.
+
+**Deferred boundaries:** initial string/array allocation failure has no reliable
+error channel in these void wrappers: the bundled string creation/content
+setters do not publish engine errors to `PA_GetLastError`. Do not invent a
+success-shaped fallback, publish a failed descriptor, or discard original
+caller data. Such failure behavior remains unmodified and uncertified.
+`PA_ResizeArray` updates its count even if handle resize fails and may already
+dispose truncated elements; normal-array tests do not certify resize OOM.
+SDK-only application-path/picture-data string ownership, C_POINTER metadata
+semantics, conversion/other non-string allocation failures, real 4D callbacks,
+Windows execution and packaged plugin binaries are also not certified here.
+The scoped `Native string ownership` CI runs only this unsigned shim on
+`macos-latest`; existing manual release workflows and signing/packaging phases
+are unchanged and are not dispatched by this maintenance work.
+
 `mapm` brings arbitrary-precision decimal arithmetic to 4D by wrapping Michael Ring's MAPM library (version 4.9.5, [LuaDist/mapm](https://github.com/LuaDist/mapm)). Every number goes in and comes out as **Text**, so values are never squeezed into a 4D `Real` and never lose digits: you can add two 40-digit decimals exactly, compute √2 to 10,000 places, or work with integers far beyond the Longint and Real ranges. The plugin exposes 45 commands covering arithmetic, rounding, integer functions, powers and logarithms, circular and hyperbolic trigonometry, random numbers, and number inspection.
 
 | Command | Returns | Purpose |
